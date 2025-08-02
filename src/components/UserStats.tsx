@@ -1,6 +1,6 @@
 import React from 'react';
 import { Coins, Package, User } from 'lucide-react';
-import { UserAccount, Config } from '../hooks/useStakingProgram';
+import type { UserAccount, Config } from '../hooks/useStakingProgram';
 
 interface UserStatsProps {
   userAccount: UserAccount | null;

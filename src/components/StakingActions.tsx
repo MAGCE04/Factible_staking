@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserPlus, Lock, Unlock, Gift, Loader2 } from 'lucide-react';
-import { useStakingProgram, UserAccount, Config } from '../hooks/useStakingProgram';
+import { useStakingProgram } from '../hooks/useStakingProgram';
+import type { UserAccount, Config } from '../hooks/useStakingProgram';
 
 interface StakingActionsProps {
   userAccount: UserAccount | null;
