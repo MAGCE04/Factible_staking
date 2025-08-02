@@ -4,7 +4,7 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { findMasterEditionPda, findMetadataPda } from '@metaplex-foundation/mpl-token-metadata';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { publicKey } from '@metaplex-foundation/umi';
+import { publicKey as umiPublicKey } from '@metaplex-foundation/umi';
 import { useAnchorProgram } from './useAnchorProgram';
 
 export interface UserAccount {
@@ -166,8 +166,8 @@ export const useStakingProgram = () => {
       if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
 
       // Get metadata and edition PDAs using UMI
-      const nftMetadata = findMetadataPda(umi, { mint: publicKey(mint.toString()) });
-      const nftEdition = findMasterEditionPda(umi, { mint: publicKey(mint.toString()) });
+      const nftMetadata = findMetadataPda(umi, { mint: umiPublicKey(mint.toString()) });
+      const nftEdition = findMasterEditionPda(umi, { mint: umiPublicKey(mint.toString()) });
 
       const tx = await program.methods
         .stake()
@@ -215,7 +215,7 @@ export const useStakingProgram = () => {
       if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
 
       // Get edition PDA using UMI
-      const nftEdition = findMasterEditionPda(umi, { mint: publicKey(mint.toString()) });
+      const nftEdition = findMasterEditionPda(umi, { mint: umiPublicKey(mint.toString()) });
 
       const tx = await program.methods
         .unstake()
