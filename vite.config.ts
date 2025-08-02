@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     inject({
       Buffer: ['buffer', 'Buffer'],
+      process: 'process',
     }),
   ],
   define: {
@@ -17,9 +18,12 @@ export default defineConfig({
   resolve: {
     alias: {
       buffer: 'buffer',
+      process: 'process',
+      util: 'util',
+      stream: 'stream-browserify',
     },
   },
   optimizeDeps: {
-    include: ['buffer'],
+    include: ['buffer', 'process', 'util', 'stream-browserify'],
   },
 })
