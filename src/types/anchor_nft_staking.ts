@@ -4,7 +4,7 @@ export type AnchorNftStaking = {
   "metadata": {
     "name": "anchor_nft_staking",
     "version": "0.1.0",
-    "spec": "0.1.0"
+    "spec": "anchor"
   },
   "instructions": [
     {
@@ -335,7 +335,7 @@ export const IDL: AnchorNftStaking = {
   "metadata": {
     "name": "anchor_nft_staking",
     "version": "0.1.0",
-    "spec": "0.1.0"
+    "spec": "anchor"
   },
   "instructions": [
     {
