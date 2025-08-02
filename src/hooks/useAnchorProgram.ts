@@ -20,9 +20,13 @@ export const useAnchorProgram = () => {
       AnchorProvider.defaultOptions()
     );
 
+    const idlWithAddress = {
+      ...IDL,
+      address: PROGRAM_ID.toBase58()
+    };
+
     return new Program(
-      IDL as Idl,
-      PROGRAM_ID,
+      idlWithAddress as Idl,
       provider
     );
   }, [connection, wallet]);
