@@ -1,299 +1,188 @@
-import { useState, useCallback } from 'react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, SystemProgram } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { useAnchorProgram } from './useAnchorProgram';
+import { PublicKey } from '@solana/web3.js';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { findMasterEditionPda, findMetadataPda } from '@metaplex-foundation/mpl-token-metadata';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { publicKey as umiPublicKey } from '@metaplex-foundation/umi';
-import { useAnchorProgram } from './useAnchorProgram';
-
-export interface UserAccount {
-  points: number;
-  amountStaked: number;
-  bump: number;
-}
-
-export interface StakeAccount {
-  owner: PublicKey;
-  mint: PublicKey;
-  stakedAt: number;
-  bump: number;
-}
-
-export interface Config {
-  pointsPerStake: number;
-  maxStake: number;
-  freezePeriod: number;
-  rewardsBump: number;
-  bump: number;
-}
+import { UserAccount, ConfigAccount } from '../types/anchor-nft-staking';
 
 export const useStakingProgram = () => {
-  const { publicKey } = useWallet();
+  const { program } = useAnchorProgram();
   const { connection } = useConnection();
-  const { program, programId } = useAnchorProgram();
-  const [loading, setLoading] = useState(false);
-  const [userAccount, setUserAccount] = useState<UserAccount | null>(null);
-  const [config, setConfig] = useState<Config | null>(null);
-
+  const wallet = useWallet();
   const umi = createUmi(connection);
 
-  // Derive PDAs
-  const getConfigPDA = useCallback(() => {
+  // PDAs
+  const configPDA = PublicKey.findProgramAddressSync(
+    [Buffer.from('config')],
+    program?.programId || PublicKey.default
+  )[0];
+
+  const rewardsMintPDA = PublicKey.findProgramAddressSync(
+    [Buffer.from('rewards'), configPDA.toBuffer()],
+    program?.programId || PublicKey.default
+  )[0];
+
+  const getUserAccountPDA = (userPublicKey: PublicKey) => {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from('config')],
-      programId
+      [Buffer.from('user'), userPublicKey.toBuffer()],
+      program?.programId || PublicKey.default
     )[0];
-  }, [programId]);
+  };
 
-  const getRewardsMintPDA = useCallback(() => {
-    const configPDA = getConfigPDA();
+  const getStakeAccountPDA = (nftMint: PublicKey) => {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from('rewards'), configPDA.toBuffer()],
-      programId
+      [
+        Buffer.from('stake'),
+        nftMint.toBuffer(),
+        configPDA.toBuffer(),
+      ],
+      program?.programId || PublicKey.default
     )[0];
-  }, [programId, getConfigPDA]);
+  };
 
-  const getUserAccountPDA = useCallback(() => {
-    if (!publicKey) return null;
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from('user'), publicKey.toBuffer()],
-      programId
-    )[0];
-  }, [publicKey, programId]);
+  // Initialize config
+  const initializeConfig = async (pointsPerStake: number, maxStake: number, freezePeriod: number) => {
+    if (!program || !wallet.publicKey) return;
 
-  const getStakeAccountPDA = useCallback((mintAddress: PublicKey) => {
-    const configPDA = getConfigPDA();
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from('stake'), mintAddress.toBuffer(), configPDA.toBuffer()],
-      programId
-    )[0];
-  }, [programId, getConfigPDA]);
+    return program.methods
+      .initializeConfig(pointsPerStake, maxStake, freezePeriod)
+      .accountsPartial({
+        admin: wallet.publicKey,
+        config: configPDA,
+        rewardsMint: rewardsMintPDA,
+        systemProgram: PublicKey.default,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  };
 
-  // Fetch user account
-  const fetchUserAccount = useCallback(async () => {
-    if (!program || !publicKey) return null;
+  // Initialize user
+  const initializeUser = async () => {
+    if (!program || !wallet.publicKey) return;
 
+    const userAccountPDA = getUserAccountPDA(wallet.publicKey);
+
+    return program.methods
+      .initializeUser()
+      .accountsPartial({
+        user: wallet.publicKey,
+        userAccount: userAccountPDA,
+        systemProgram: PublicKey.default,
+      })
+      .rpc();
+  };
+
+  // Get user account data
+  const getUserAccount = async (): Promise<UserAccount | null> => {
+    if (!program || !wallet.publicKey) return null;
+
+    const userAccountPDA = getUserAccountPDA(wallet.publicKey);
     try {
-      const userAccountPDA = getUserAccountPDA();
-      if (!userAccountPDA) return null;
-
-      const account = await program.account.user.fetch(userAccountPDA);
-      const userData = {
-        points: account.points,
-        amountStaked: account.amountStaked,
-        bump: account.bump,
-      };
-      setUserAccount(userData);
-      return userData;
+      // Use the typed account fetch
+      return await program.account.user.fetch(userAccountPDA) as UserAccount;
     } catch (error) {
-      console.log('User account not found or error fetching:', error);
-      setUserAccount(null);
+      console.error('Error fetching user account:', error);
       return null;
     }
-  }, [program, publicKey, getUserAccountPDA]);
+  };
 
-  // Fetch config
-  const fetchConfig = useCallback(async () => {
+  // Get config account data
+  const getConfigAccount = async (): Promise<ConfigAccount | null> => {
     if (!program) return null;
 
     try {
-      const configPDA = getConfigPDA();
-      const account = await program.account.config.fetch(configPDA);
-      const configData = {
-        pointsPerStake: account.pointsPerStake,
-        maxStake: account.maxStake,
-        freezePeriod: account.freezePeriod,
-        rewardsBump: account.rewardsBump,
-        bump: account.bump,
-      };
-      setConfig(configData);
-      return configData;
+      // Use the typed account fetch
+      return await program.account.config.fetch(configPDA) as ConfigAccount;
     } catch (error) {
-      console.log('Config not found or error fetching:', error);
-      setConfig(null);
+      console.error('Error fetching config account:', error);
       return null;
     }
-  }, [program, getConfigPDA]);
-
-  // Initialize user account
-  const initializeUser = useCallback(async () => {
-    if (!program || !publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    setLoading(true);
-    try {
-      const userAccountPDA = getUserAccountPDA();
-      if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
-
-      const tx = await program.methods
-        .initializeUser()
-        .accountsPartial({
-          user: publicKey,
-          userAccount: userAccountPDA,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-
-      console.log('User account initialized:', tx);
-      await fetchUserAccount();
-      return tx;
-    } catch (error) {
-      console.error('Error initializing user:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [program, publicKey, getUserAccountPDA, fetchUserAccount]);
+  };
 
   // Stake NFT
-  const stakeNFT = useCallback(async (mintAddress: string, collectionMintAddress: string) => {
-    if (!program || !publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  const stakeNFT = async (nftMint: PublicKey, collectionMint: PublicKey) => {
+    if (!program || !wallet.publicKey) return;
 
-    setLoading(true);
-    try {
-      const mint = new PublicKey(mintAddress);
-      const collectionMint = new PublicKey(collectionMintAddress);
-      
-      const mintAta = getAssociatedTokenAddressSync(mint, publicKey);
-      const configPDA = getConfigPDA();
-      const userAccountPDA = getUserAccountPDA();
-      const stakeAccountPDA = getStakeAccountPDA(mint);
+    const userAccountPDA = getUserAccountPDA(wallet.publicKey);
+    const stakeAccountPDA = getStakeAccountPDA(nftMint);
+    const mintAta = getAssociatedTokenAddressSync(nftMint, wallet.publicKey);
+    
+    const nftMetadata = findMetadataPda(umi, { mint: nftMint });
+    const nftEdition = findMasterEditionPda(umi, { mint: nftMint });
 
-      if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
-
-      // Get metadata and edition PDAs using UMI
-      const nftMetadata = findMetadataPda(umi, { mint: umiPublicKey(mint.toString()) });
-      const nftEdition = findMasterEditionPda(umi, { mint: umiPublicKey(mint.toString()) });
-
-      const tx = await program.methods
-        .stake()
-        .accountsPartial({
-          user: publicKey,
-          mint,
-          collectionMint,
-          mintAta,
-          metadata: new PublicKey(nftMetadata[0]),
-          edition: new PublicKey(nftEdition[0]),
-          config: configPDA,
-          stakeAccount: stakeAccountPDA,
-          userAccount: userAccountPDA,
-          systemProgram: SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          metadataProgram: new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
-        })
-        .rpc();
-
-      console.log('NFT staked:', tx);
-      await fetchUserAccount();
-      return tx;
-    } catch (error) {
-      console.error('Error staking NFT:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [program, publicKey, getConfigPDA, getUserAccountPDA, getStakeAccountPDA, fetchUserAccount, umi]);
+    return program.methods
+      .stake()
+      .accountsPartial({
+        user: wallet.publicKey,
+        mint: nftMint,
+        collectionMint: collectionMint,
+        mintAta,
+        metadata: new PublicKey(nftMetadata[0]),
+        edition: new PublicKey(nftEdition[0]),
+        config: configPDA,
+        stakeAccount: stakeAccountPDA,
+        userAccount: userAccountPDA,
+      })
+      .rpc();
+  };
 
   // Unstake NFT
-  const unstakeNFT = useCallback(async (mintAddress: string) => {
-    if (!program || !publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  const unstakeNFT = async (nftMint: PublicKey) => {
+    if (!program || !wallet.publicKey) return;
 
-    setLoading(true);
-    try {
-      const mint = new PublicKey(mintAddress);
-      const mintAta = getAssociatedTokenAddressSync(mint, publicKey);
-      const configPDA = getConfigPDA();
-      const userAccountPDA = getUserAccountPDA();
-      const stakeAccountPDA = getStakeAccountPDA(mint);
+    const userAccountPDA = getUserAccountPDA(wallet.publicKey);
+    const stakeAccountPDA = getStakeAccountPDA(nftMint);
+    const mintAta = getAssociatedTokenAddressSync(nftMint, wallet.publicKey);
+    
+    const nftEdition = findMasterEditionPda(umi, { mint: nftMint });
 
-      if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
-
-      // Get edition PDA using UMI
-      const nftEdition = findMasterEditionPda(umi, { mint: umiPublicKey(mint.toString()) });
-
-      const tx = await program.methods
-        .unstake()
-        .accountsPartial({
-          user: publicKey,
-          mint,
-          mintAta,
-          edition: new PublicKey(nftEdition[0]),
-          config: configPDA,
-          stakeAccount: stakeAccountPDA,
-          userAccount: userAccountPDA,
-          systemProgram: SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          metadataProgram: new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s'),
-        })
-        .rpc();
-
-      console.log('NFT unstaked:', tx);
-      await fetchUserAccount();
-      return tx;
-    } catch (error) {
-      console.error('Error unstaking NFT:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [program, publicKey, getConfigPDA, getUserAccountPDA, getStakeAccountPDA, fetchUserAccount, umi]);
+    return program.methods
+      .unstake()
+      .accountsPartial({
+        user: wallet.publicKey,
+        mint: nftMint,
+        mintAta,
+        edition: new PublicKey(nftEdition[0]),
+        config: configPDA,
+        stakeAccount: stakeAccountPDA,
+        userAccount: userAccountPDA,
+      })
+      .rpc();
+  };
 
   // Claim rewards
-  const claimRewards = useCallback(async () => {
-    if (!program || !publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  const claimRewards = async () => {
+    if (!program || !wallet.publicKey) return;
 
-    setLoading(true);
-    try {
-      const configPDA = getConfigPDA();
-      const userAccountPDA = getUserAccountPDA();
-      const rewardsMint = getRewardsMintPDA();
-      const rewardsAta = getAssociatedTokenAddressSync(rewardsMint, publicKey);
+    const userAccountPDA = getUserAccountPDA(wallet.publicKey);
+    const rewardsAta = getAssociatedTokenAddressSync(rewardsMintPDA, wallet.publicKey);
 
-      if (!userAccountPDA) throw new Error('Cannot derive user account PDA');
-
-      const tx = await program.methods
-        .claim()
-        .accountsPartial({
-          user: publicKey,
-          userAccount: userAccountPDA,
-          rewardsMint,
-          config: configPDA,
-          rewardsAta,
-          systemProgram: SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        })
-        .rpc();
-
-      console.log('Rewards claimed:', tx);
-      await fetchUserAccount();
-      return tx;
-    } catch (error) {
-      console.error('Error claiming rewards:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, [program, publicKey, getConfigPDA, getUserAccountPDA, getRewardsMintPDA, fetchUserAccount]);
+    return program.methods
+      .claim()
+      .accountsPartial({
+        user: wallet.publicKey,
+        userAccount: userAccountPDA,
+        rewardsMint: rewardsMintPDA,
+        config: configPDA,
+        rewardsAta,
+        systemProgram: PublicKey.default,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  };
 
   return {
-    userAccount,
-    config,
-    loading,
+    initializeConfig,
     initializeUser,
+    getUserAccount,
+    getConfigAccount,
     stakeNFT,
     unstakeNFT,
     claimRewards,
-    fetchUserAccount,
-    fetchConfig,
+    configPDA,
+    rewardsMintPDA,
     getUserAccountPDA,
     getStakeAccountPDA,
   };
