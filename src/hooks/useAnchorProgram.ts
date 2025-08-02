@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { IDL } from '../types/anchor_nft_staking';
 import type { AnchorNftStaking } from '../types/anchor_nft_staking';
@@ -21,7 +21,7 @@ export const useAnchorProgram = () => {
     );
 
     return new Program<AnchorNftStaking>(
-      IDL as Idl,
+      IDL,
       PROGRAM_ID,
       provider
     );
