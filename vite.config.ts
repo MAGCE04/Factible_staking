@@ -25,5 +25,16 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['buffer', 'process', 'util', 'stream-browserify'],
+    esbuildOptions: {
+      loader: {
+        '.js': 'jsx',
+      },
+    },
+  },
+  build: {
+    esbuild: {
+      loader: 'jsx',
+      include: /src\/.*\.js$/,
+    },
   },
 })
