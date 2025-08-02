@@ -1,6 +1,7 @@
 {
   "license": "ISC",
   "scripts": {
+    "dev": "vite",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "build": "tsc -b && vite build",
