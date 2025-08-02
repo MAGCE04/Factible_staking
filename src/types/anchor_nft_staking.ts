@@ -1,6 +1,8 @@
 export type AnchorNftStaking = {
   "version": "0.1.0",
   "name": "anchor_nft_staking",
+  "address": string,
+  "metadata": {},
   "instructions": [
     {
       "name": "initializeConfig",
