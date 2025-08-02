@@ -337,10 +337,6 @@ export const IDL: AnchorNftStaking = {
     "version": "0.1.0",
     "spec": "0.1.0"
   },
-    "name": "anchor_nft_staking",
-    "version": "0.1.0",
-    "spec": "anchor"
-  },
   "instructions": [
     {
       "name": "initializeConfig",
