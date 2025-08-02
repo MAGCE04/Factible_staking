@@ -3,7 +3,7 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import type { Idl } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
-import IDL_JSON from '../../target/idl/anchor_nft_stacking.json';
+import { IDL } from '../types/anchor_nft_staking';
 
 const PROGRAM_ID = new PublicKey('7dMsiW22eikw4o2hKMjPqg45ftzRM2ibc11VSdpeTdTY');
 
@@ -21,7 +21,7 @@ export const useAnchorProgram = () => {
     );
 
     const idlWithAddress: Idl = {
-      ...IDL_JSON,
+      ...IDL,
       address: PROGRAM_ID.toBase58()
     } as Idl;
 
