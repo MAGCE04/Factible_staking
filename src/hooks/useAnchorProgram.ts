@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import type { Idl } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { IDL } from '../types/anchor_nft_staking';
 
